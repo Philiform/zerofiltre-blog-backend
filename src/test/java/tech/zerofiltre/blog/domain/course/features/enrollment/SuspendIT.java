@@ -84,9 +84,9 @@ class SuspendIT {
     @BeforeEach
     void init() throws ZerofiltreException {
         doNothing().when(sandboxProvider).destroy(any(), any());
-        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, dbCourseProvider);
-        enroll = new Enroll(enrollmentProvider, dbCourseProvider, dbUserProvider, chapterProvider, sandboxProvider, null, checker, companyCourseProvider);
-        findEnrollment = new FindEnrollment(enrollmentProvider, dbCourseProvider, chapterProvider);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, dbCourseProvider, checker);
+        enroll = new Enroll(enrollmentProvider, dbCourseProvider, dbUserProvider, chapterProvider, sandboxProvider, null, checker);
+        findEnrollment = new FindEnrollment(enrollmentProvider, dbCourseProvider, chapterProvider, checker);
     }
 
     @Test
@@ -101,9 +101,9 @@ class SuspendIT {
 
         Course course = ZerofiltreUtils.createMockCourse(false, Status.PUBLISHED, author, Collections.emptyList(), Collections.emptyList());
         course = dbCourseProvider.save(course);
-        enroll.execute(user.getId(), course.getId(), 0);
+        enroll.execute(user.getId(), course.getId(), 0, false);
         LocalDateTime beforeSuspend = LocalDateTime.now();
-        Enrollment enrollment = suspend.execute(user.getId(), course.getId());
+        Enrollment enrollment = suspend.execute(user.getId(), course.getId(), 0);
         LocalDateTime afterSuspend = LocalDateTime.now();
 
         assertThat(enrollment).isNotNull();
@@ -214,7 +214,7 @@ class SuspendIT {
         assertThat(purchase.getId()).isNotZero();
 
         //when
-        suspend.execute(user.getId(), courseBasic.getId());
+        suspend.execute(user.getId(), courseBasic.getId(), 0);
 
 
         //then

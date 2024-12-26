@@ -66,8 +66,8 @@ public class StripeCommons {
             ITemplateEngine emailTemplateEngine,
             PurchaseProvider purchaseProvider,
             SandboxProvider sandboxProvider,
-            DataChecker checker,
-            CompanyCourseProvider companyCourseProvider) {
+            CompanyCourseProvider companyCourseProvider,
+            DataChecker checker) {
 
         this.userProvider = userProvider;
         this.emailSender = emailSender;
@@ -75,8 +75,8 @@ public class StripeCommons {
         this.emailTemplateEngine = emailTemplateEngine;
         this.courseProvider = courseProvider;
         this.purchaseProvider = purchaseProvider;
-        enroll = new Enroll(enrollmentProvider, courseProvider, userProvider, chapterProvider, sandboxProvider, purchaseProvider, checker, companyCourseProvider);
-        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider);
+        enroll = new Enroll(enrollmentProvider, courseProvider, userProvider, chapterProvider, sandboxProvider, purchaseProvider, checker);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
     }
 
     public void fulfillOrder(String userId, com.stripe.model.Product productObject, boolean paymentSuccess, Event event, Customer customer) throws ZerofiltreException {
@@ -96,7 +96,7 @@ public class StripeCommons {
                 purchase(userId, event, productId);
                 log.debug("EventId= {}, EventType={}, User of id={} enrolled in Product id: {}", event.getId(), event.getType(), userId, productId);
             } else {
-                suspend.execute(Long.parseLong(userId), productId);
+                suspend.execute(Long.parseLong(userId), productId, 0);
                 log.debug("EventId= {}, EventType={}, User of id={} suspended from Product id: {}", event.getId(), event.getType(), userId, productId);
             }
             updateUserInfo(userId, paymentSuccess, event, customer, false);
@@ -112,7 +112,7 @@ public class StripeCommons {
                     .orElseThrow(() -> new ResourceNotFoundException(EVENT_ID + event.getId() + EVENT_TYPE + event.getType() + " We couldn't find the course " + productId + TO_EDIT, String.valueOf(productId)));
             Purchase purchase = new Purchase(user, course);
             purchase = purchaseProvider.save(purchase);
-            if (purchase.getId() != 0) enroll.execute(Long.parseLong(userId), productId, 0);
+            if (purchase.getId() != 0) enroll.execute(Long.parseLong(userId), productId, 0, false);
         }
     }
 

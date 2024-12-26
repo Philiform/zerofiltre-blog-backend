@@ -6,6 +6,7 @@ import com.stripe.param.PlanRetrieveParams;
 import com.stripe.param.SubscriptionRetrieveParams;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import tech.zerofiltre.blog.domain.company.CompanyCourseProvider;
 import tech.zerofiltre.blog.domain.course.ChapterProvider;
 import tech.zerofiltre.blog.domain.course.CourseProvider;
 import tech.zerofiltre.blog.domain.course.EnrollmentProvider;
@@ -17,6 +18,7 @@ import tech.zerofiltre.blog.domain.sandbox.SandboxProvider;
 import tech.zerofiltre.blog.domain.user.UserProvider;
 import tech.zerofiltre.blog.domain.user.model.User;
 import tech.zerofiltre.blog.infra.InfraProperties;
+import tech.zerofiltre.blog.util.DataChecker;
 import tech.zerofiltre.blog.util.ZerofiltreUtils;
 
 import java.util.List;
@@ -35,12 +37,12 @@ public class SubscriptionEventHandler {
     private final StripeCommons stripeCommons;
     private final InfraProperties infraProperties;
 
-    public SubscriptionEventHandler(EnrollmentProvider enrollmentProvider, ChapterProvider chapterProvider, PurchaseProvider purchaseProvider, UserProvider userProvider, StripeCommons stripeCommons, InfraProperties infraProperties, SandboxProvider sandboxProvider, CourseProvider courseProvider) {
+    public SubscriptionEventHandler(EnrollmentProvider enrollmentProvider, ChapterProvider chapterProvider, PurchaseProvider purchaseProvider, UserProvider userProvider, StripeCommons stripeCommons, InfraProperties infraProperties, SandboxProvider sandboxProvider, CourseProvider courseProvider, CompanyCourseProvider companyCourseProvider, DataChecker checker) {
         this.userProvider = userProvider;
         this.enrollmentProvider = enrollmentProvider;
         this.stripeCommons = stripeCommons;
         this.infraProperties = infraProperties;
-        this.suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider);
+        this.suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
     }
 
     public void handleSubscriptionDeleted(Event event, Subscription subscription) throws ZerofiltreException, StripeException {
@@ -120,7 +122,7 @@ public class SubscriptionEventHandler {
         if (courseId.isEmpty()) {
             suspend.all(userIdLong, false);
         } else {
-            suspend.execute(userIdLong, Long.parseLong(courseId));
+            suspend.execute(userIdLong, Long.parseLong(courseId), 0);
         }
     }
 

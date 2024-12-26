@@ -1,6 +1,9 @@
 package tech.zerofiltre.blog.domain.course.features.enrollment;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import tech.zerofiltre.blog.domain.FinderRequest;
 import tech.zerofiltre.blog.domain.Page;
 import tech.zerofiltre.blog.domain.course.ChapterProvider;
@@ -15,16 +18,21 @@ import tech.zerofiltre.blog.doubles.EnrollmentProviderSpy;
 import tech.zerofiltre.blog.doubles.FoundChapterProviderSpy;
 import tech.zerofiltre.blog.doubles.Found_Published_WithKnownAuthor_CourseProvider_Spy_And_2Lessons;
 import tech.zerofiltre.blog.doubles.NotFoundEnrollmentProviderDummy;
-import tech.zerofiltre.blog.util.ZerofiltreUtils;
+import tech.zerofiltre.blog.util.DataChecker;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.*;
 import static tech.zerofiltre.blog.domain.FinderRequest.Filter.COMPLETED;
 import static tech.zerofiltre.blog.domain.FinderRequest.Filter.INACTIVE;
 import static tech.zerofiltre.blog.domain.article.model.Status.DRAFT;
 
-
+@ExtendWith(MockitoExtension.class)
 class FindEnrollmentTest {
+
+    @Mock
+    DataChecker checker;
 
     @Test
     void findEnrollment_returns_theProperPage() {
@@ -32,7 +40,7 @@ class FindEnrollmentTest {
         EnrollmentProviderSpy enrollmentProviderSpy = new EnrollmentProviderSpy();
         CourseProvider courseProvider = new Found_Published_WithKnownAuthor_CourseProvider_Spy_And_2Lessons();
         ChapterProvider chapterProvider = new FoundChapterProviderSpy();
-        FindEnrollment findEnrollment = new FindEnrollment(enrollmentProviderSpy, courseProvider, chapterProvider);
+        FindEnrollment findEnrollment = new FindEnrollment(enrollmentProviderSpy, courseProvider, chapterProvider, checker);
         //when
         FinderRequest request = new FinderRequest(0, 3, DRAFT, new User());
         Page<Course> courses = findEnrollment.of(request);
@@ -61,7 +69,7 @@ class FindEnrollmentTest {
         EnrollmentProviderSpy enrollmentProvider = new EnrollmentProviderSpy();
         CourseProvider courseProvider = new Found_Published_WithKnownAuthor_CourseProvider_Spy_And_2Lessons();
         ChapterProvider chapterProvider = new FoundChapterProviderSpy();
-        FindEnrollment findEnrollment = new FindEnrollment(enrollmentProvider, courseProvider, chapterProvider);
+        FindEnrollment findEnrollment = new FindEnrollment(enrollmentProvider, courseProvider, chapterProvider, checker);
         //when
         FinderRequest request = new FinderRequest(0, 3, DRAFT, new User());
         request.setFilter(INACTIVE);
@@ -79,7 +87,7 @@ class FindEnrollmentTest {
         EnrollmentProviderSpy enrollmentProvider = new EnrollmentProviderSpy();
         CourseProvider courseProvider = new Found_Published_WithKnownAuthor_CourseProvider_Spy_And_2Lessons();
         ChapterProvider chapterProvider = new FoundChapterProviderSpy();
-        FindEnrollment findEnrollment = new FindEnrollment(enrollmentProvider, courseProvider, chapterProvider);
+        FindEnrollment findEnrollment = new FindEnrollment(enrollmentProvider, courseProvider, chapterProvider, checker);
         //when
         FinderRequest request = new FinderRequest(0, 3, DRAFT, new User());
         request.setFilter(COMPLETED);
@@ -92,18 +100,38 @@ class FindEnrollmentTest {
     }
 
     @Test
-    void findAEnrollment_returns_theProperOne() throws ResourceNotFoundException, ForbiddenActionException {
+    void findAEnrollmentForUser_returns_theProperOne() throws ResourceNotFoundException, ForbiddenActionException {
         //given
         EnrollmentProviderSpy enrollmentProvider = new EnrollmentProviderSpy();
         CourseProvider courseProvider = new Found_Published_WithKnownAuthor_CourseProvider_Spy_And_2Lessons();
         ChapterProvider chapterProvider = new FoundChapterProviderSpy();
-        FindEnrollment findEnrollment = new FindEnrollment(enrollmentProvider, courseProvider, chapterProvider);
-        User executor = ZerofiltreUtils.createMockUser(true);
+        FindEnrollment findEnrollment = new FindEnrollment(enrollmentProvider, courseProvider, chapterProvider, checker);
         //when
-        Enrollment enrollment = findEnrollment.of(0, 1, executor);
+        Enrollment enrollment = findEnrollment.of(0, 1, 0, false);
         //then
         assertThat(enrollment).isNotNull();
+        verify(checker, never()).companyUserExists(anyLong(), anyLong());
+        verify(checker, never()).companyCourseExists(anyLong(), anyLong());
+    }
 
+    @Test
+    void findAEnrollmentForAdminUser_returns_theProperOne() throws ResourceNotFoundException, ForbiddenActionException {
+        //given
+        EnrollmentProviderSpy enrollmentProvider = new EnrollmentProviderSpy();
+        CourseProvider courseProvider = new Found_Published_WithKnownAuthor_CourseProvider_Spy_And_2Lessons();
+        ChapterProvider chapterProvider = new FoundChapterProviderSpy();
+        FindEnrollment findEnrollment = new FindEnrollment(enrollmentProvider, courseProvider, chapterProvider, checker);
+
+        when(checker.companyUserExists(anyLong(), anyLong())).thenReturn(true);
+        when(checker.companyCourseExists(anyLong(), anyLong())).thenReturn(true);
+
+        //when
+        Enrollment enrollment = findEnrollment.of(0, 1, 1, true);
+
+        //then
+        assertThat(enrollment).isNotNull();
+        verify(checker).companyUserExists(anyLong(), anyLong());
+        verify(checker).companyCourseExists(anyLong(), anyLong());
     }
 
     @Test
@@ -112,30 +140,13 @@ class FindEnrollmentTest {
         EnrollmentProvider enrollmentProvider = new NotFoundEnrollmentProviderDummy();
         CourseProvider courseProvider = new Found_Published_WithKnownAuthor_CourseProvider_Spy_And_2Lessons();
         ChapterProvider chapterProvider = new FoundChapterProviderSpy();
-        FindEnrollment findEnrollment = new FindEnrollment(enrollmentProvider, courseProvider, chapterProvider);
-        User executor = ZerofiltreUtils.createMockUser(true);
+        FindEnrollment findEnrollment = new FindEnrollment(enrollmentProvider, courseProvider, chapterProvider, checker);
 
         //when
         //then
         assertThatExceptionOfType(ResourceNotFoundException.class)
-                .isThrownBy(() -> findEnrollment.of(1, 1, executor))
+                .isThrownBy(() -> findEnrollment.of(1, 1, 0, true))
                 .withMessage("Enrollment not found");
-    }
-
-    @Test
-    void findAnEnrollment_throwsForbiddenActionException_ifExecutor_isNotAdmin_NorInvolved() {
-        //given
-        EnrollmentProvider enrollmentProvider = new EnrollmentProviderSpy();
-        CourseProvider courseProvider = new Found_Published_WithKnownAuthor_CourseProvider_Spy_And_2Lessons();
-        ChapterProvider chapterProvider = new FoundChapterProviderSpy();
-        FindEnrollment findEnrollment = new FindEnrollment(enrollmentProvider, courseProvider, chapterProvider);
-        User executor = ZerofiltreUtils.createMockUser(false);
-
-        //when
-        //then
-        assertThatExceptionOfType(ForbiddenActionException.class)
-                .isThrownBy(() -> findEnrollment.of(1, 1, executor))
-                .withMessage("You are only allow to look for your enrollments");
     }
 
 }

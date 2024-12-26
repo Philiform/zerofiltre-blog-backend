@@ -13,6 +13,7 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import tech.zerofiltre.blog.domain.company.CompanyCourseProvider;
 import tech.zerofiltre.blog.domain.course.ChapterProvider;
 import tech.zerofiltre.blog.domain.course.CourseProvider;
 import tech.zerofiltre.blog.domain.course.EnrollmentProvider;
@@ -24,6 +25,7 @@ import tech.zerofiltre.blog.domain.purchase.PurchaseProvider;
 import tech.zerofiltre.blog.domain.user.UserProvider;
 import tech.zerofiltre.blog.domain.user.model.User;
 import tech.zerofiltre.blog.infra.InfraProperties;
+import tech.zerofiltre.blog.util.DataChecker;
 
 import java.util.*;
 
@@ -70,16 +72,22 @@ class SubscriptionEventHandlerTest {
     CourseProvider courseProvider;
 
     @Mock
+    CompanyCourseProvider companyCourseProvider;
+
+    @Mock
     StripeCommons stripeCommons;
 
     @Mock
     InfraProperties infraProperties;
 
+    @Mock
+    DataChecker checker;
+
     SubscriptionEventHandler eventHandler;
 
     @BeforeEach
     void init() {
-        eventHandler = new SubscriptionEventHandler(enrollmentProvider, chapterProvider, purchaseProvider, userProvider, stripeCommons, infraProperties, null, courseProvider);
+        eventHandler = new SubscriptionEventHandler(enrollmentProvider, chapterProvider, purchaseProvider, userProvider, stripeCommons, infraProperties, null, courseProvider, companyCourseProvider, checker);
         ReflectionTestUtils.setField(eventHandler, "suspend", suspend);
     }
 
@@ -148,7 +156,7 @@ class SubscriptionEventHandlerTest {
                 assertThat(enrollment.isForLife()).isEqualTo(false);
 
                 verify(enrollmentProvider, times(1)).save(any(Enrollment.class));
-                verify(suspend, times(0)).execute(anyLong(), anyLong());
+                verify(suspend, times(0)).execute(anyLong(), anyLong(), anyLong());
                 verify(suspend, times(0)).all(anyLong(), anyBoolean());
                 verify(stripeCommons, times(1)).notifyUser(any(), anyString(), anyString());
             }
@@ -211,7 +219,7 @@ class SubscriptionEventHandlerTest {
                 eventHandler.handleSubscriptionDeleted(event, subscription);
 
                 //assert
-                verify(suspend, times(1)).execute(userId15, courseId3);
+                verify(suspend, times(1)).execute(userId15, courseId3, 0);
                 verify(suspend, times(0)).all(anyLong(), anyBoolean());
                 verify(stripeCommons, times(1)).notifyUser(any(), anyString(), anyString());
             }
@@ -232,7 +240,7 @@ class SubscriptionEventHandlerTest {
 
         //assert
         verify(suspend, times(0)).all(anyLong(), anyBoolean());
-        verify(suspend, times(0)).execute(anyLong(), anyLong());
+        verify(suspend, times(0)).execute(anyLong(), anyLong(), anyLong());
 
     }
 
@@ -285,7 +293,7 @@ class SubscriptionEventHandlerTest {
 
                 //assert
                 verify(suspend, times(1)).all(userId15, false);
-                verify(suspend, times(0)).execute(anyLong(), anyLong());
+                verify(suspend, times(0)).execute(anyLong(), anyLong(), anyLong());
                 verify(stripeCommons, times(1)).notifyUser(any(), anyString(), anyString());
             }
         }
@@ -344,7 +352,7 @@ class SubscriptionEventHandlerTest {
                 assertThat(user.getPlan()).isEqualTo(User.Plan.BASIC);
 
                 verify(suspend, times(1)).all(userId15, false);
-                verify(suspend, times(0)).execute(anyLong(), anyLong());
+                verify(suspend, times(0)).execute(anyLong(), anyLong(), anyLong());
                 verify(userProvider, times(1)).save(any());
                 verify(stripeCommons, times(1)).notifyUser(any(), anyString(), anyString());
             }
@@ -376,7 +384,7 @@ class SubscriptionEventHandlerTest {
 
             //assert
             verify(suspend, times(0)).all(anyLong(), anyBoolean());
-            verify(suspend, times(0)).execute(anyLong(), anyLong());
+            verify(suspend, times(0)).execute(anyLong(), anyLong(), anyLong());
             verify(stripeCommons, times(0)).notifyUser(any(), anyString(), anyString());
         }
     }

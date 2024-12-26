@@ -10,6 +10,7 @@ import tech.zerofiltre.blog.domain.error.ForbiddenActionException;
 import tech.zerofiltre.blog.domain.error.ZerofiltreException;
 import tech.zerofiltre.blog.domain.purchase.PurchaseProvider;
 import tech.zerofiltre.blog.domain.sandbox.SandboxProvider;
+import tech.zerofiltre.blog.util.DataChecker;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,16 +24,24 @@ public class Suspend {
     private final PurchaseProvider purchaseProvider;
     private final SandboxProvider sandboxProvider;
     private final CourseProvider courseProvider;
+    private final DataChecker checker;
 
-    public Suspend(EnrollmentProvider enrollmentProvider, ChapterProvider chapterProvider, PurchaseProvider purchaseProvider, SandboxProvider sandboxProvider, CourseProvider courseProvider) {
+    public Suspend(EnrollmentProvider enrollmentProvider, ChapterProvider chapterProvider, PurchaseProvider purchaseProvider, SandboxProvider sandboxProvider, CourseProvider courseProvider, DataChecker checker) {
         this.enrollmentProvider = enrollmentProvider;
         this.chapterProvider = chapterProvider;
         this.purchaseProvider = purchaseProvider;
         this.sandboxProvider = sandboxProvider;
         this.courseProvider = courseProvider;
+        this.checker = checker;
     }
 
-    public Enrollment execute(long userId, long courseId) throws ZerofiltreException {
+    public Enrollment execute(long userId, long courseId, long companyId) throws ZerofiltreException {
+        if(companyId > 0) {
+            checker.companyExists(companyId);
+            checker.companyUserExists(companyId, userId);
+            checker.companyCourseExists(companyId, courseId);
+        }
+
         Enrollment enrollment = enrollmentProvider.enrollmentOf(userId, courseId, true)
                 .orElseThrow(() -> new ForbiddenActionException("You are not enrolled in the course of id " + courseId));
         return doSuspend(userId, enrollment);

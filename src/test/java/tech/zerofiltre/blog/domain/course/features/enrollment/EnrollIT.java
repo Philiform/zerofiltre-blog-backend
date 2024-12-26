@@ -84,8 +84,8 @@ class EnrollIT {
     @BeforeEach
     void init() throws ZerofiltreException {
         doNothing().when(sandboxProvider).destroy(any(), any());
-        enroll = new Enroll(enrollmentProvider, dbCourseProvider, dbUserProvider, chapterProvider, null, dbPurchaseProvider, checker, companyCourseProvider);
-        suspend = new Suspend(enrollmentProvider, chapterProvider, dbPurchaseProvider, sandboxProvider, dbCourseProvider);
+        enroll = new Enroll(enrollmentProvider, dbCourseProvider, dbUserProvider, chapterProvider, null, dbPurchaseProvider, checker);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, dbPurchaseProvider, sandboxProvider, dbCourseProvider, checker);
     }
 
     @Test
@@ -102,7 +102,7 @@ class EnrollIT {
         Course course = ZerofiltreUtils.createMockCourse(false, Status.PUBLISHED, author, Collections.emptyList(), Collections.emptyList());
         course = dbCourseProvider.save(course);
         LocalDateTime beforeEnroll = LocalDateTime.now();
-        Enrollment enrollment = enroll.execute(user.getId(), course.getId(), 0);
+        Enrollment enrollment = enroll.execute(user.getId(), course.getId(), 0, false);
         LocalDateTime afterEnroll = LocalDateTime.now();
 
         assertThat(enrollment).isNotNull();
@@ -142,7 +142,7 @@ class EnrollIT {
         dbPurchaseProvider.save(purchase);
 
         LocalDateTime beforeEnroll = LocalDateTime.now();
-        Enrollment enrollment = enroll.execute(user.getId(), course.getId(), 0);
+        Enrollment enrollment = enroll.execute(user.getId(), course.getId(), 0, false);
         LocalDateTime afterEnroll = LocalDateTime.now();
 
         assertThat(enrollment).isNotNull();
@@ -175,12 +175,12 @@ class EnrollIT {
         Course course = ZerofiltreUtils.createMockCourse(false, Status.PUBLISHED, user, Collections.emptyList(), Collections.emptyList());
         course = dbCourseProvider.save(course);
 
-        enroll.execute(user.getId(), course.getId(), 0);
+        enroll.execute(user.getId(), course.getId(), 0, false);
 
-        Enrollment suspendedEnrollment = suspend.execute(user.getId(), course.getId());
+        Enrollment suspendedEnrollment = suspend.execute(user.getId(), course.getId(), 0);
         assertThat(suspendedEnrollment.getSuspendedAt()).isNotNull();
 
-        Enrollment enrollment = enroll.execute(user.getId(), course.getId(), 0);
+        Enrollment enrollment = enroll.execute(user.getId(), course.getId(), 0, false);
 
         assertThat(enrollment.getSuspendedAt()).isNull();
         assertThat(enrollment.getId()).isEqualTo(suspendedEnrollment.getId());
@@ -214,7 +214,7 @@ class EnrollIT {
         when(companyCourseProvider.findByCompanyIdAndCourseId(anyLong(), anyLong(), anyBoolean())).thenReturn(Optional.of(linkCompanyCourse));
 
         LocalDateTime beforeEnroll = LocalDateTime.now();
-        Enrollment enrollment = enroll.execute(user.getId(), course.getId(), company.getId());
+        Enrollment enrollment = enroll.execute(user.getId(), course.getId(), company.getId(), false);
         LocalDateTime afterEnroll = LocalDateTime.now();
 
         assertThat(enrollment).isNotNull();
@@ -233,8 +233,6 @@ class EnrollIT {
         assertThat(enrollment.getEnrolledAt()).isAfterOrEqualTo(beforeEnroll);
         assertThat(enrollment.getEnrolledAt()).isBeforeOrEqualTo(afterEnroll);
         assertThat(enrollment.isActive()).isTrue();
-
-        assertThat(enrollment.getCompanyCourseId()).isEqualTo(linkCompanyCourse.getId());
     }
 
 }

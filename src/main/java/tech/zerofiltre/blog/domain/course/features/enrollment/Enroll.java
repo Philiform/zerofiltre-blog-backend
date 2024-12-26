@@ -2,8 +2,6 @@ package tech.zerofiltre.blog.domain.course.features.enrollment;
 
 import lombok.extern.slf4j.Slf4j;
 import tech.zerofiltre.blog.domain.article.model.Status;
-import tech.zerofiltre.blog.domain.company.CompanyCourseProvider;
-import tech.zerofiltre.blog.domain.company.features.CompanyCourseService;
 import tech.zerofiltre.blog.domain.course.ChapterProvider;
 import tech.zerofiltre.blog.domain.course.CourseProvider;
 import tech.zerofiltre.blog.domain.course.EnrollmentProvider;
@@ -37,9 +35,8 @@ public class Enroll {
     private final SandboxProvider sandboxProvider;
     private final PurchaseProvider purchaseProvider;
     private final DataChecker checker;
-    private final CompanyCourseService companyCourseService;
 
-    public Enroll(EnrollmentProvider enrollmentProvider, CourseProvider courseProvider, UserProvider userProvider, ChapterProvider chapterProvider, SandboxProvider sandboxProvider, PurchaseProvider purchaseProvider, DataChecker checker, CompanyCourseProvider companyCourseProvider) {
+    public Enroll(EnrollmentProvider enrollmentProvider, CourseProvider courseProvider, UserProvider userProvider, ChapterProvider chapterProvider, SandboxProvider sandboxProvider, PurchaseProvider purchaseProvider, DataChecker checker) {
         this.enrollmentProvider = enrollmentProvider;
         this.courseProvider = courseProvider;
         this.userProvider = userProvider;
@@ -47,7 +44,6 @@ public class Enroll {
         this.sandboxProvider = sandboxProvider;
         this.purchaseProvider = purchaseProvider;
         this.checker = checker;
-        this.companyCourseService = new CompanyCourseService(companyCourseProvider, checker);
     }
 
     private static void checkIfCourseIsPublished(Course course) throws ForbiddenActionException {
@@ -56,26 +52,25 @@ public class Enroll {
         }
     }
 
-    public Enrollment execute(long userId, long courseId, long companyId) throws ZerofiltreException {
-        long companyCourseId = 0;
-
-        if(companyId > 0) {
-            checker.companyUserExists(companyId, userId);
-            companyCourseId = companyCourseService.getLinkCompanyCourseIdIfCourseIsActive(companyId, courseId);
-        }
-
+    public Enrollment execute(long userId, long courseId, long companyId, boolean fromAdmin) throws ZerofiltreException {
         User user = getTheUser(userId);
         Course course = getTheCourse(courseId);
         checkIfCourseIsPublished(course);
 
+        if(companyId > 0) {
+            checker.companyExists(companyId);
+            checker.companyUserExists(companyId, userId);
+            checker.companyCourseExists(companyId, courseId);
+        }
+
         Enrollment existingEnrollment = getExisting(userId, courseId);
         if (existingEnrollment != null) return existingEnrollment;
 
-        if(companyId == 0 && !hasFreeAccess(user, course)) {
+        if(!fromAdmin && companyId == 0 && !hasFreeAccess(user, course)) {
             checkIfCourseIsPurchased(userId, courseId);
         }
 
-        Enrollment enrollment = buildAndSaveEnrollment(userId, courseId, companyCourseId, course, user);
+        Enrollment enrollment = buildAndSaveEnrollment(userId, courseId, companyId, course, user);
 
         Course resultCourse = enrollment.getCourse();
         resultCourse.setEnrolledCount(getEnrolledCount(resultCourse.getId()));
@@ -85,7 +80,7 @@ public class Enroll {
         return enrollment;
     }
 
-    /*private */User getTheUser(long userId) throws ResourceNotFoundException {
+    private User getTheUser(long userId) throws ResourceNotFoundException {
         return userProvider.userOfId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "We could not find the user with id " + userId,
@@ -142,7 +137,7 @@ public class Enroll {
         }
     }
 
-    private Enrollment buildAndSaveEnrollment(long userId, long courseId, long companyCourseId, Course course, User user) throws ZerofiltreException {
+    private Enrollment buildAndSaveEnrollment(long userId, long courseId, long companyId, Course course, User user) throws ZerofiltreException {
         Enrollment enrollment = new Enrollment();
         LocalDateTime lastModifiedAt = LocalDateTime.now();
         Optional<Enrollment> cancelledEnrollment = enrollmentProvider.enrollmentOf(userId, courseId, false);
@@ -156,9 +151,8 @@ public class Enroll {
             lastModifiedAt = enrollment.getEnrolledAt();
         }
         enrollment.setLastModifiedAt(lastModifiedAt);
-        enrollment.setCompanyCourseId(companyCourseId);
 
-        if(companyCourseId == 0) {
+        if(companyId == 0) {
             enrollment.setForLife(!user.isPro() || course.isMentored());
         }
 

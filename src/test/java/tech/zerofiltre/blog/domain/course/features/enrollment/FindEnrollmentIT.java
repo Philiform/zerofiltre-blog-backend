@@ -3,6 +3,7 @@ package tech.zerofiltre.blog.domain.course.features.enrollment;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import tech.zerofiltre.blog.domain.FinderRequest;
 import tech.zerofiltre.blog.domain.Page;
 import tech.zerofiltre.blog.domain.course.ChapterProvider;
@@ -16,6 +17,7 @@ import tech.zerofiltre.blog.domain.user.model.User;
 import tech.zerofiltre.blog.infra.providers.database.course.*;
 import tech.zerofiltre.blog.infra.providers.database.user.DBUserProvider;
 import tech.zerofiltre.blog.infra.providers.database.user.UserJPARepository;
+import tech.zerofiltre.blog.util.DataChecker;
 import tech.zerofiltre.blog.util.ZerofiltreUtils;
 
 import java.util.Collections;
@@ -38,6 +40,9 @@ class FindEnrollmentIT {
     private CourseJPARepository courseJPARepository;
     @Autowired
     private ChapterJPARepository chapterJPARepository;
+
+    @MockBean
+    DataChecker checker;
 
     @Test
     void findEnrollment_returns_properPage_forInActiveEnrollments() throws ZerofiltreException {
@@ -165,7 +170,7 @@ class FindEnrollmentIT {
         UserProvider userProvider = new DBUserProvider(userJPARepository);
         CourseProvider courseProvider = new DBCourseProvider(courseJPARepository, userJPARepository);
         ChapterProvider chapterProvider = new DBChapterProvider(chapterJPARepository);
-        findEnrollment = new FindEnrollment(enrollmentProvider, courseProvider, chapterProvider);
+        findEnrollment = new FindEnrollment(enrollmentProvider, courseProvider, chapterProvider, checker);
 
 
         User author = ZerofiltreUtils.createMockUser(false);

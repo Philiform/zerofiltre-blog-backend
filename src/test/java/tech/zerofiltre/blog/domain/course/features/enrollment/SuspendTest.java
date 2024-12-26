@@ -2,17 +2,20 @@ package tech.zerofiltre.blog.domain.course.features.enrollment;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import tech.zerofiltre.blog.domain.Page;
+import tech.zerofiltre.blog.domain.company.model.LinkCompanyCourse;
 import tech.zerofiltre.blog.domain.course.ChapterProvider;
 import tech.zerofiltre.blog.domain.course.CourseProvider;
 import tech.zerofiltre.blog.domain.course.EnrollmentProvider;
 import tech.zerofiltre.blog.domain.course.model.Course;
 import tech.zerofiltre.blog.domain.course.model.Enrollment;
 import tech.zerofiltre.blog.domain.error.ForbiddenActionException;
+import tech.zerofiltre.blog.domain.error.ResourceNotFoundException;
 import tech.zerofiltre.blog.domain.error.ZerofiltreException;
 import tech.zerofiltre.blog.domain.purchase.PurchaseProvider;
 import tech.zerofiltre.blog.domain.sandbox.SandboxProvider;
@@ -21,6 +24,7 @@ import tech.zerofiltre.blog.domain.user.model.User;
 import tech.zerofiltre.blog.doubles.ChapterProviderSpy;
 import tech.zerofiltre.blog.doubles.EnrollmentProviderSpy;
 import tech.zerofiltre.blog.doubles.NotEnrolledEnrollmentProvider;
+import tech.zerofiltre.blog.util.DataChecker;
 import tech.zerofiltre.blog.util.ZerofiltreUtils;
 
 import java.time.LocalDateTime;
@@ -29,6 +33,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,6 +45,7 @@ class SuspendTest {
     SandboxProvider sandboxProvider = mock(SandboxProvider.class);
     CourseProvider courseProvider = mock(CourseProvider.class);
     PurchaseProvider purchaseProvider = mock(PurchaseProvider.class);
+    DataChecker checker = mock(DataChecker.class);
 
     @BeforeEach
     void init() throws ZerofiltreException {
@@ -51,9 +57,9 @@ class SuspendTest {
     void suspendThrowsExceptionWhenUserIsNotEnrolledToCourse() {
         EnrollmentProvider enrollmentProvider = new NotEnrolledEnrollmentProvider();
         ChapterProvider chapterProvider = new ChapterProviderSpy();
-        suspend = new Suspend(enrollmentProvider, chapterProvider, null, sandboxProvider, courseProvider);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, null, sandboxProvider, courseProvider, checker);
         Assertions.assertThatExceptionOfType(ForbiddenActionException.class)
-                .isThrownBy(() -> suspend.execute(1, 1))
+                .isThrownBy(() -> suspend.execute(1, 1, 0))
                 .withMessage("You are not enrolled in the course of id 1");
     }
 
@@ -62,10 +68,10 @@ class SuspendTest {
         EnrollmentProviderSpy enrollmentProviderSpy = new EnrollmentProviderSpy();
         LocalDateTime beforeSuspend = LocalDateTime.now();
         ChapterProviderSpy chapterProvider = new ChapterProviderSpy();
-        suspend = new Suspend(enrollmentProviderSpy, chapterProvider, purchaseProvider, sandboxProvider, courseProvider);
+        suspend = new Suspend(enrollmentProviderSpy, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
         LocalDateTime afterSuspendPlus10Sec = LocalDateTime.now().plusSeconds(10);
 
-        Enrollment deactivatedEnrollment = suspend.execute(1, 1);
+        Enrollment deactivatedEnrollment = suspend.execute(1, 1, 0);
         assertThat(chapterProvider.ofCourseIdCalled).isTrue();
 
         assertThat(deactivatedEnrollment).isNotNull();
@@ -83,9 +89,9 @@ class SuspendTest {
         EnrollmentProvider enrollmentProvider = new EnrollmentProviderSpy();
         ChapterProvider chapterProvider = new ChapterProviderSpy();
 
-        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
 
-        suspend.execute(1, 1);
+        suspend.execute(1, 1, 0);
 
         verify(purchaseProvider, times(1)).delete(1, 0);
 
@@ -106,9 +112,9 @@ class SuspendTest {
 
         when(enrollmentProvider.enrollmentOf(user.getId(), course.getId(), true)).thenReturn(Optional.of(enrollment));
         when(enrollmentProvider.save(any())).thenReturn(enrollment);
-        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
 
-        suspend.execute(user.getId(), course.getId());
+        suspend.execute(user.getId(), course.getId(), 0);
 
         verify(sandboxProvider, times(1)).destroy(anyString(), anyString());
     }
@@ -128,11 +134,135 @@ class SuspendTest {
 
         when(enrollmentProvider.enrollmentOf(user.getId(), course.getId(), true)).thenReturn(Optional.of(enrollment));
         when(enrollmentProvider.save(any())).thenReturn(enrollment);
-        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
 
-        suspend.execute(user.getId(), course.getId());
+        suspend.execute(user.getId(), course.getId(), 0);
 
         verify(sandboxProvider, times(0)).destroy(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("If non company when execute then suspend enrollment")
+    void suspendDontDeleteFromAdminIsTrue() throws ZerofiltreException {
+        //GIVEN
+        User user = ZerofiltreUtils.createMockUser(false);
+        Course course = ZerofiltreUtils.createMockCourse(Sandbox.Type.NONE);
+
+        Enrollment enrollment = new Enrollment();
+        enrollment.setEnrolledAt(LocalDateTime.now().minusDays(2));
+        enrollment.setLastModifiedAt(enrollment.getEnrolledAt());
+        enrollment.setSuspendedAt(LocalDateTime.now().minusDays(1));
+        enrollment.setActive(true);
+        enrollment.setUser(user);
+        enrollment.setCourse(course);
+
+        when(enrollmentProvider.enrollmentOf(user.getId(), course.getId(), true)).thenReturn(Optional.of(enrollment));
+        when(enrollmentProvider.save(any())).thenReturn(enrollment);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
+
+        //WHEN
+        suspend.execute(user.getId(), course.getId(), 0);
+
+        //THEN
+        verify(checker, never()).companyUserExists(anyLong(), anyLong());
+        verify(checker, never()).companyCourseExists(anyLong(), anyLong());
+        verify(checker, never()).companyExists(anyLong());
+    }
+
+    @Test
+    @DisplayName("If the company, company user and company course exist when execute then verify call functions")
+    void suspendDontDeleteWithCompanyIdAndCompanyUserAndCompanyCourse() throws ZerofiltreException {
+        //GIVEN
+        User user = ZerofiltreUtils.createMockUser(false);
+        Course course = ZerofiltreUtils.createMockCourse(Sandbox.Type.NONE);
+        LinkCompanyCourse linkCompanyCourse = new LinkCompanyCourse();
+        linkCompanyCourse.setId(1);
+
+        Enrollment enrollment = new Enrollment();
+        enrollment.setEnrolledAt(LocalDateTime.now().minusDays(2));
+        enrollment.setLastModifiedAt(enrollment.getEnrolledAt());
+        enrollment.setSuspendedAt(LocalDateTime.now().minusDays(1));
+        enrollment.setActive(true);
+        enrollment.setUser(user);
+        enrollment.setCourse(course);
+        enrollment.setCompanyCourseId(linkCompanyCourse.getId());
+
+        when(checker.companyExists(anyLong())).thenReturn(true);
+        when(checker.companyUserExists(anyLong(), anyLong())).thenReturn(true);
+        when(checker.companyCourseExists(anyLong(), anyLong())).thenReturn(true);
+        when(enrollmentProvider.enrollmentOf(user.getId(), course.getId(), true)).thenReturn(Optional.of(enrollment));
+        when(enrollmentProvider.save(any())).thenReturn(enrollment);
+
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
+
+        //WHEN
+        suspend.execute(user.getId(), course.getId(), 1);
+
+        //THEN
+        verify(checker).companyExists(anyLong());
+        verify(checker).companyUserExists(anyLong(), anyLong());
+        verify(checker).companyCourseExists(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("If the company does not exist when execute then an exception is thrown")
+    void suspendThrowsExceptionWhenBadCompany() throws ZerofiltreException {
+        //GIVEN
+        when(checker.companyExists(anyLong())).thenThrow(ResourceNotFoundException.class);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
+
+        //WHEN
+        assertThrows(ResourceNotFoundException.class, () -> suspend.execute(1, 1, 1));
+
+        //THEN
+        verify(checker).companyExists(anyLong());
+    }
+
+    @Test
+    @DisplayName("If the company user does not exist when execute then an exception is thrown")
+    void suspendThrowsExceptionWhenBadCompanyUser() throws ZerofiltreException {
+        //GIVEN
+        when(checker.companyExists(anyLong())).thenReturn(true);
+        when(checker.companyUserExists(anyLong(), anyLong())).thenThrow(ResourceNotFoundException.class);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
+
+        //WHEN
+        assertThrows(ResourceNotFoundException.class, () -> suspend.execute(1, 1, 1));
+
+        //THEN
+        verify(checker).companyUserExists(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("If the company course does not exist when execute then an exception is thrown")
+    void suspendThrowsExceptionWhenBadCompanyCourse() throws ZerofiltreException {
+        //GIVEN
+        when(checker.companyExists(anyLong())).thenReturn(true);
+        when(checker.companyUserExists(anyLong(), anyLong())).thenReturn(true);
+        when(checker.companyCourseExists(anyLong(), anyLong())).thenThrow(ResourceNotFoundException.class);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
+
+        //WHEN
+        assertThrows(ResourceNotFoundException.class, () -> suspend.execute(1, 1, 1));
+
+        //THEN
+        verify(checker).companyCourseExists(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("If the company course does not exist when execute then an exception is thrown")
+    void suspendThrowsExceptionWhenBadLinkCompanyCourseId() throws ZerofiltreException {
+        //GIVEN
+        when(checker.companyExists(anyLong())).thenReturn(true);
+        when(checker.companyUserExists(anyLong(), anyLong())).thenReturn(true);
+        when(checker.companyCourseExists(anyLong(), anyLong())).thenThrow(ResourceNotFoundException.class);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
+
+        //WHEN
+        assertThrows(ResourceNotFoundException.class, () -> suspend.execute(1, 1, 1));
+
+        //THEN
+        verify(checker).companyCourseExists(anyLong(), anyLong());
     }
 
     @Test
@@ -170,7 +300,7 @@ class SuspendTest {
         when(enrollmentProvider.of(anyInt(), anyInt(), anyLong(), eq(null), eq(null))).thenReturn(enrollmentsPage);
         when(enrollmentProvider.save(any(Enrollment.class))).thenReturn(enrollment1).thenReturn(enrollment2);
 
-        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
 
         //WHEN
         suspend.all(1, true);
@@ -217,7 +347,7 @@ class SuspendTest {
 
         when(enrollmentProvider.of(anyInt(), anyInt(), anyLong(), eq(null), eq(null))).thenReturn(enrollmentsPage);
 
-        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
 
         //WHEN
         suspend.all(1, true);
@@ -245,7 +375,7 @@ class SuspendTest {
         when(enrollmentProvider.findAllByCompanyCourseIdAndActive(anyLong(), anyBoolean())).thenReturn(List.of(enrollment1, enrollment2));
         when(enrollmentProvider.save(any(Enrollment.class))).thenReturn(enrollment1).thenReturn(enrollment2);
 
-        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
 
         //WHEN
         suspend.byLinkId(1);
@@ -292,7 +422,7 @@ class SuspendTest {
         when(enrollmentProvider.findAllByCompanyCourseIdAndActive(anyLong(), anyBoolean())).thenReturn(List.of(enrollment1, enrollment2));
         when(enrollmentProvider.save(any(Enrollment.class))).thenReturn(enrollment1).thenReturn(enrollment2);
 
-        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
 
         //WHEN
         suspend.byLinkId(1);
@@ -319,7 +449,7 @@ class SuspendTest {
         //GIVEN
         when(enrollmentProvider.findAllByCompanyCourseIdAndActive(anyLong(), anyBoolean())).thenReturn(new ArrayList<>());
 
-        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider);
+        suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
 
         //WHEN
         suspend.byLinkId(1);

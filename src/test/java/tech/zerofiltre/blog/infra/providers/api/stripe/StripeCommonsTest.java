@@ -149,7 +149,7 @@ class StripeCommonsTest {
         stripeCommons.fulfillOrder(userId, product, false, event, customer);
 
         // Assert
-        verify(suspend, times(1)).execute(Long.parseLong(userId), 25);
+        verify(suspend, times(1)).execute(Long.parseLong(userId), 25, 0);
     }
 
 }

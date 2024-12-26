@@ -9,7 +9,7 @@ import tech.zerofiltre.blog.domain.course.model.Course;
 import tech.zerofiltre.blog.domain.course.model.Enrollment;
 import tech.zerofiltre.blog.domain.error.ForbiddenActionException;
 import tech.zerofiltre.blog.domain.error.ResourceNotFoundException;
-import tech.zerofiltre.blog.domain.user.model.User;
+import tech.zerofiltre.blog.util.DataChecker;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -19,11 +19,13 @@ public class FindEnrollment {
     private final EnrollmentProvider enrollmentProvider;
     private final CourseProvider courseProvider;
     private final ChapterProvider chapterProvider;
+    private final DataChecker checker;
 
-    public FindEnrollment(EnrollmentProvider enrollmentProvider, CourseProvider courseProvider, ChapterProvider chapterProvider) {
+    public FindEnrollment(EnrollmentProvider enrollmentProvider, CourseProvider courseProvider, ChapterProvider chapterProvider, DataChecker checker) {
         this.enrollmentProvider = enrollmentProvider;
         this.courseProvider = courseProvider;
         this.chapterProvider = chapterProvider;
+        this.checker = checker;
     }
 
     public Page<Course> of(FinderRequest request) {
@@ -45,10 +47,12 @@ public class FindEnrollment {
         return result;
     }
 
-    public Enrollment of(long courseId, long userId, User executor) throws ResourceNotFoundException, ForbiddenActionException {
-        if (!executor.isAdmin() && executor.getId() != userId) {
-            throw new ForbiddenActionException("You are only allow to look for your enrollments");
+    public Enrollment of(long courseId, long userId, long companyId, boolean fromAdmin) throws ResourceNotFoundException, ForbiddenActionException {
+        if(fromAdmin && companyId > 0) {
+            checker.companyUserExists(companyId, userId);
+            checker.companyCourseExists(companyId, courseId);
         }
+
         return enrollmentProvider.enrollmentOf(userId, courseId, true)
                 .map(enrollment -> {
                     enrollment.getCourse().setEnrolledCount(getEnrolledCount(courseId));

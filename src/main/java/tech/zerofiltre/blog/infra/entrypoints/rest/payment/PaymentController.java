@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.*;
 import tech.zerofiltre.blog.domain.Product;
+import tech.zerofiltre.blog.domain.company.CompanyCourseProvider;
 import tech.zerofiltre.blog.domain.course.ChapterProvider;
 import tech.zerofiltre.blog.domain.course.CourseProvider;
 import tech.zerofiltre.blog.domain.course.EnrollmentProvider;
@@ -22,6 +23,7 @@ import tech.zerofiltre.blog.domain.user.model.User;
 import tech.zerofiltre.blog.infra.InfraProperties;
 import tech.zerofiltre.blog.infra.entrypoints.rest.SecurityContextManager;
 import tech.zerofiltre.blog.infra.entrypoints.rest.payment.model.ChargeRequestVM;
+import tech.zerofiltre.blog.util.DataChecker;
 
 import javax.validation.Valid;
 
@@ -35,17 +37,16 @@ public class PaymentController {
     private final PaymentService stripePaymentService;
     private final PaymentService notchPaymentService;
 
-
     public PaymentController(SecurityContextManager securityContextManager,
                              CourseProvider courseProvider,
                              InfraProperties infraProperties,
                              @Qualifier("stripeProvider") PaymentProvider stripeProvider,
                              @Qualifier("notchPayProvider") PaymentProvider notchPayProvider,
                              UserProvider userProvider,
-                             EnrollmentProvider enrollmentProvider, ChapterProvider chapterProvider, PurchaseProvider purchaseProvider, SandboxProvider sandboxProvider) {
+                             EnrollmentProvider enrollmentProvider, ChapterProvider chapterProvider, PurchaseProvider purchaseProvider, SandboxProvider sandboxProvider, CompanyCourseProvider companyCourseProvider, DataChecker checker) {
         this.securityContextManager = securityContextManager;
         this.courseProvider = courseProvider;
-        Suspend suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider);
+        Suspend suspend = new Suspend(enrollmentProvider, chapterProvider, purchaseProvider, sandboxProvider, courseProvider, checker);
         stripePaymentService = new PaymentService(stripeProvider, userProvider, suspend);
         notchPaymentService = new PaymentService(notchPayProvider, userProvider, suspend);
         Stripe.apiKey = infraProperties.getStripeSecretKey();
